@@ -7,10 +7,10 @@ import (
 
 const RequestIDKey = "request_id"
 
-func RequestID() gin.HandlerFunc{
+func RequestID() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		rid := ctx.GetHeader("X-Request-ID")
-		if rid == ""{
+		if rid == "" {
 			rid = uuid.NewString()
 		}
 

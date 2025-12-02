@@ -10,8 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func getRequestID(ctx *gin.Context) string{
-	if v, ok := ctx.Get(midleware.RequestIDKey); ok{
+func getRequestID(ctx *gin.Context) string {
+	if v, ok := ctx.Get(midleware.RequestIDKey); ok {
 		rid := v.(string)
 		return rid
 	}
@@ -56,7 +56,7 @@ func respondWithError(c *gin.Context, err error) {
 	logger.Errorf("%sinternal_error: %v", prefix, err)
 
 	c.JSON(http.StatusInternalServerError, gin.H{
-		"error": "internal server error",
+		"error":      "internal server error",
 		"request_id": rid,
 	})
 }
