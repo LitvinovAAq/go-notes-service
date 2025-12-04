@@ -1,39 +1,81 @@
 version: "3.9"
 
 services:
-  app:
-    build: .
-    container_name: myapp
+  note-service:
+    build:
+      context: ./note-service
+      dockerfile: Dockerfile
+    container_name: note_service
     ports:
       - "8081:8081"
     environment:
-      PG_HOST: db
+      PG_HOST: notes-db
       PG_PORT: 5432
       PG_USER: postgres
       PG_PASSWORD: admin
-      PG_DB: GoStud
+      PG_DB: notesdb
+      JWT_SECRET: "super-secret-key" 
     depends_on:
-      db:
+      notes-db:
         condition: service_healthy
 
-  db:
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: user_service
+    ports:
+      - "8082:8082"
+    environment:
+      PG_HOST: users-db
+      PG_PORT: 5432
+      PG_USER: postgres
+      PG_PASSWORD: admin
+      PG_DB: usersdb
+      JWT_SECRET: "super-secret-key"
+    depends_on:
+      users-db:
+        condition: service_healthy
+
+
+  notes-db:
     image: postgres:15
-    container_name: postgres_db
+    container_name: notes_db
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: admin
-      POSTGRES_DB: GoStud
+      POSTGRES_DB: notesdb
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 3s
       retries: 5
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - notes_pgdata:/var/lib/postgresql/data
+      - ./note-service/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
-      - "5432:5432"
+      - "5433:5432"
+
+  users-db:
+    image: postgres:15
+    container_name: users_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: usersdb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - users_pgdata:/var/lib/postgresql/data
+      - ./user-service/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5434:5432"
 
 volumes:
-  pgdata:
+  notes_pgdata:
+  users_pgdata:
