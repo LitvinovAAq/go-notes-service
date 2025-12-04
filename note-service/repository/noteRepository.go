@@ -5,17 +5,18 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
 	"myproject/models"
 )
 
 var ErrNotFound = errors.New("not found")
 
 type NoteRepo interface {
-	GetAll(ctx context.Context) ([]models.Note, error)
-	GetByID(ctx context.Context, id int) (*models.Note, error)
-	Create(ctx context.Context, title, content string) (int, error)
-	Delete(ctx context.Context, id int) error
-	Update(ctx context.Context, id int, title *string, content *string) (models.Note, error)
+	GetAll(ctx context.Context, userID int) ([]models.Note, error)
+	GetById(ctx context.Context, userID, id int) (models.Note, error)
+	Create(ctx context.Context, userID int, title, content string) (int, error)
+	Delete(ctx context.Context, userID, id int) error
+	Update(ctx context.Context, userID, id int, title *string, content *string) (models.Note, error)
 }
 
 type NoteRepository struct {
@@ -26,8 +27,12 @@ func CreateNoteRepository(db *sql.DB) *NoteRepository {
 	return &NoteRepository{db: db}
 }
 
-func (r *NoteRepository) GetAll(ctx context.Context) ([]models.Note, error) {
-	rows, err := r.db.QueryContext(ctx, "SELECT id, title, content FROM notes")
+// Получить все заметки конкретного пользователя
+func (r *NoteRepository) GetAll(ctx context.Context, userID int) ([]models.Note, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, user_id, title, content FROM notes WHERE user_id = $1`,
+		userID,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("repo: get all notes: %w", err)
 	}
@@ -37,7 +42,7 @@ func (r *NoteRepository) GetAll(ctx context.Context) ([]models.Note, error) {
 
 	for rows.Next() {
 		var note models.Note
-		err := rows.Scan(&note.Id, &note.Title, &note.Content)
+		err := rows.Scan(&note.Id, &note.UserID, &note.Title, &note.Content)
 		if err != nil {
 			return nil, fmt.Errorf("repo: scan notes %w", err)
 		}
@@ -49,39 +54,47 @@ func (r *NoteRepository) GetAll(ctx context.Context) ([]models.Note, error) {
 	return notes, nil
 }
 
-func (r *NoteRepository) GetById(ctx context.Context, id int) (*models.Note, error) {
+// Получить одну заметку пользователя по id
+func (r *NoteRepository) GetById(ctx context.Context, userID, id int) (models.Note, error) {
 	var note models.Note
-	err := r.db.QueryRowContext(ctx, "SELECT id, title, content FROM notes WHERE id = $1",
-		id).Scan(&note.Id, &note.Title, &note.Content)
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, user_id, title, content FROM notes WHERE id = $1 AND user_id = $2`,
+		id, userID,
+	).Scan(&note.Id, &note.UserID, &note.Title, &note.Content)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
+			return models.Note{}, ErrNotFound
 		}
-		return nil, fmt.Errorf("repo: get note by id: %w", err)
+		return models.Note{}, fmt.Errorf("repo: get note by id: %w", err)
 	}
-	return &note, nil
+	return note, nil
 }
 
-func (r *NoteRepository) Create(ctx context.Context, title, content string) (int, error) {
-
-	var note models.Note
-	err := r.db.QueryRowContext(ctx, "INSERT INTO notes (title, content) VALUES ($1, $2) RETURNING id", title, content).
-		Scan(&note.Id)
+// Создать заметку для пользователя
+func (r *NoteRepository) Create(ctx context.Context, userID int, title, content string) (int, error) {
+	var id int
+	err := r.db.QueryRowContext(ctx,
+		`INSERT INTO notes (user_id, title, content) VALUES ($1, $2, $3) RETURNING id`,
+		userID, title, content,
+	).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("repo: create note title = %q: %w", title, err)
 	}
 
-	return note.Id, nil
+	return id, nil
 }
 
-func (r *NoteRepository) Delete(ctx context.Context, id int) error {
-	result, err := r.db.ExecContext(ctx, "DELETE FROM notes WHERE id = $1", id)
+// Удалить заметку пользователя
+func (r *NoteRepository) Delete(ctx context.Context, userID, id int) error {
+	result, err := r.db.ExecContext(ctx,
+		`DELETE FROM notes WHERE id = $1 AND user_id = $2`,
+		id, userID,
+	)
 	if err != nil {
 		return fmt.Errorf("repo: delete note id=%d: %w", id, err)
 	}
 
 	n, err := result.RowsAffected()
-
 	if err != nil {
 		return fmt.Errorf("repo: delete id=%d: rowsAffected: %w", id, err)
 	}
@@ -92,9 +105,10 @@ func (r *NoteRepository) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func (r *NoteRepository) Update(ctx context.Context, id int, title *string, content *string) (models.Note, error) {
-	// Проверим, есть ли такая заметка
-	existing, err := r.GetById(ctx, id)
+// Частично обновить заметку пользователя
+func (r *NoteRepository) Update(ctx context.Context, userID, id int, title *string, content *string) (models.Note, error) {
+	// Проверим, есть ли такая заметка и принадлежит ли она этому пользователю
+	existing, err := r.GetById(ctx, userID, id)
 	if err != nil {
 		return models.Note{}, err // здесь ErrNotFound пробросится вверх
 	}
@@ -110,8 +124,8 @@ func (r *NoteRepository) Update(ctx context.Context, id int, title *string, cont
 		newContent = *content
 	}
 
-	query := `UPDATE notes SET title = $1, content = $2 WHERE id = $3`
-	_, err = r.db.ExecContext(ctx, query, newTitle, newContent, id)
+	query := `UPDATE notes SET title = $1, content = $2 WHERE id = $3 AND user_id = $4`
+	_, err = r.db.ExecContext(ctx, query, newTitle, newContent, id, userID)
 	if err != nil {
 		return models.Note{}, fmt.Errorf("repo: update-note: %w", err)
 	}
@@ -119,6 +133,7 @@ func (r *NoteRepository) Update(ctx context.Context, id int, title *string, cont
 	// Возвращаем обновлённую заметку
 	return models.Note{
 		Id:      id,
+		UserID:  userID,
 		Title:   newTitle,
 		Content: newContent,
 	}, nil

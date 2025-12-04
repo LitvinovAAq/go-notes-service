@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS notes (
     id SERIAL PRIMARY KEY,
-    title TEXT NOT NULL,
+    user_id INT NOT NULL,
+    title   TEXT NOT NULL,
     content TEXT
 );
