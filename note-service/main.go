@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"myproject/db"
+	"myproject/events"
 	"myproject/midleware"
 	"myproject/repository"
 	"myproject/routes"
@@ -22,6 +24,15 @@ func main() {
 
 	repo := repository.CreateNoteRepository(database)
 	srv := service.CreateNoteService(repo)
+
+	// контекст для Kafka-consumer'а
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// запускаем consumer, который слушает user_registered и создаёт приветственные заметки
+	if err := events.RunUserRegisteredConsumer(ctx, srv); err != nil {
+		fmt.Println("failed to start Kafka consumer:", err)
+	}
 
 	r := gin.New()
 
@@ -49,5 +60,4 @@ func main() {
 	if err := r.Run(":" + port); err != nil {
 		panic(err)
 	}
-
 }

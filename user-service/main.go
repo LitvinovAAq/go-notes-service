@@ -7,6 +7,7 @@ import (
     "github.com/gin-gonic/gin"
 
     "user-service/db"
+    "user-service/events"
     "user-service/handlers"
     "user-service/repository"
     "user-service/service"
@@ -21,8 +22,11 @@ func main() {
     }
     log.Println("connected to users-db")
 
+    kafkaWriter := events.NewUserRegisteredWriter()
+    defer kafkaWriter.Close()
+
     userRepo := repository.NewUserRepository(database)
-    userSvc := service.NewUserService(userRepo)
+    userSvc := service.NewUserService(userRepo, kafkaWriter)
 
     r.GET("/health", func(c *gin.Context) {
         c.JSON(http.StatusOK, gin.H{"status": "user-service ok"})

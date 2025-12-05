@@ -7,7 +7,9 @@ import (
 	"strings"
 
  	"golang.org/x/crypto/bcrypt"
+    "github.com/segmentio/kafka-go"
 
+    "user-service/events"
 	"user-service/models"
 	"user-service/repository"
 )
@@ -31,10 +33,14 @@ type UserService interface {
 
 type userService struct {
 	repo *repository.UserRepository
+    kafka *kafka.Writer
 }
 
-func NewUserService(repo *repository.UserRepository) UserService {
-	return &userService{repo: repo}
+func NewUserService(repo *repository.UserRepository, writer *kafka.Writer) UserService {
+	return &userService{
+		repo:  repo,
+		kafka: writer,
+	}
 }
 
 func (s *userService) RegisterUser(ctx context.Context, email, password string) (models.User, error) {
@@ -73,6 +79,12 @@ func (s *userService) RegisterUser(ctx context.Context, email, password string) 
     id, err := s.repo.Create(ctx, email, string(hash))
     if err != nil {
         return models.User{}, fmt.Errorf("service: create-user: %w", err)
+    }
+
+    if s.kafka != nil {
+	    if err := events.PublishUserRegistered(ctx, s.kafka, id, email); err != nil {
+		    fmt.Printf("failed to publish user_registered event: %v\n", err)
+	    }
     }
 
     return models.User{
