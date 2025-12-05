@@ -17,7 +17,6 @@ type UserRegisteredEvent struct {
 	Email  string `json:"email"`
 }
 
-// Запускаем отдельную горутину, которая слушает Kafka и создаёт приветственные заметки
 func RunUserRegisteredConsumer(ctx context.Context, noteSvc service.NoteService) error {
 	broker := os.Getenv("KAFKA_BROKER")
 	if broker == "" {
@@ -28,47 +27,61 @@ func RunUserRegisteredConsumer(ctx context.Context, noteSvc service.NoteService)
 		topic = "user_registered"
 	}
 
+	fmt.Printf("[KAFKA] starting consumer on broker=%s topic=%s\n", broker, topic)
+
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        []string{broker},
 		Topic:          topic,
 		GroupID:        "note-service-consumer",
 		CommitInterval: time.Second,
 	})
-	// reader.Close() делаем через горутину/контекст при завершении
+
+	// Закрытие reader при завершении контекста
 	go func() {
 		<-ctx.Done()
+		fmt.Println("[KAFKA] context closed, stopping consumer")
 		_ = reader.Close()
 	}()
 
+	// Основная горутина чтения сообщений Kafka
 	go func() {
 		for {
 			m, err := reader.ReadMessage(ctx)
 			if err != nil {
-				// при отменённом контексте выходим
 				if ctx.Err() != nil {
+					fmt.Println("[KAFKA] consumer stopped")
 					return
 				}
-				fmt.Printf("kafka read error: %v\n", err)
+				fmt.Printf("[KAFKA] read error: %v\n", err)
 				continue
 			}
 
 			var ev UserRegisteredEvent
 			if err := json.Unmarshal(m.Value, &ev); err != nil {
-				fmt.Printf("failed to unmarshal user_registered: %v\n", err)
+				fmt.Printf("[KAFKA] failed to unmarshal event: %v\n", err)
 				continue
 			}
 
-			// создаём приветственную заметку
+			// ЛОГ №1 — событие получено
+			fmt.Printf(
+				"[KAFKA] event received topic=%s partition=%d offset=%d user_id=%d email=%s\n",
+				m.Topic, m.Partition, m.Offset, ev.UserID, ev.Email,
+			)
+
+			// ЛОГ №2 — начинаем создание
+			fmt.Printf("[KAFKA] creating welcome note for user=%d\n", ev.UserID)
+
 			title := "Добро пожаловать!"
 			content := fmt.Sprintf("Привет, %s! Это ваша первая заметка.", ev.Email)
 
-			_, err = noteSvc.CreateNote(context.Background(), ev.UserID, title, content)
+			id, err := noteSvc.CreateNote(context.Background(), ev.UserID, title, content)
 			if err != nil {
-				fmt.Printf("failed to create welcome note for user %d: %v\n", ev.UserID, err)
+				fmt.Printf("[KAFKA] failed to create welcome note for user=%d: %v\n", ev.UserID, err)
 				continue
 			}
 
-			fmt.Printf("welcome note created for user %d\n", ev.UserID)
+			// ЛОГ №3 — всё успешно
+			fmt.Printf("[KAFKA] welcome note created id=%d user=%d\n", id, ev.UserID)
 		}
 	}()
 

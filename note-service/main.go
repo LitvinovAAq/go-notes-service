@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"myproject/cache"
 	"myproject/db"
 	"myproject/events"
 	"myproject/midleware"
@@ -15,7 +16,6 @@ import (
 )
 
 func main() {
-
 	database, err := db.GetDB()
 	if err != nil {
 		panic(err)
@@ -23,7 +23,8 @@ func main() {
 	defer database.Close()
 
 	repo := repository.CreateNoteRepository(database)
-	srv := service.CreateNoteService(repo)
+	notesCache := cache.NewNotesCache()
+	srv := service.CreateNoteService(repo, notesCache)
 
 	// контекст для Kafka-consumer'а
 	ctx, cancel := context.WithCancel(context.Background())
@@ -37,7 +38,7 @@ func main() {
 	r := gin.New()
 
 	r.GET("/health", func(c *gin.Context) {
-    	c.JSON(200, gin.H{"status": "ok"})
+		c.JSON(200, gin.H{"status": "ok"})
 	})
 
 	r.Use(gin.Recovery())
@@ -47,14 +48,14 @@ func main() {
 	routes.RegisterNoteRoutes(r, srv)
 
 	if err := database.Ping(); err != nil {
-		panic("HE удалось подключиться к БД: " + err.Error())
+		panic("Не удалось подключиться к БД: " + err.Error())
 	}
 
 	fmt.Println("Подключение к БД успешно!")
 
 	port := os.Getenv("PORT")
 	if port == "" {
-    	port = "8081"
+		port = "8081"
 	}
 
 	if err := r.Run(":" + port); err != nil {
