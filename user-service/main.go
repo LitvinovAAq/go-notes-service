@@ -33,7 +33,7 @@ func main() {
     })
 
     r.POST("/users/register", handlers.RegisterUser(userSvc))
-    r.POST("/auth/login", handlers.LoginUser(userSvc)) // ← добавили
+    r.POST("/auth/login", handlers.LoginUser(userSvc))
 
     if err := r.Run(":8082"); err != nil {
         log.Fatalf("failed to run user-service: %v", err)

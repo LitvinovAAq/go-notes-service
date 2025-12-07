@@ -42,7 +42,6 @@ func CreateNoteService(repo *repository.NoteRepository, c *cache.NotesCache) *no
 }
 
 // Получить одну заметку пользователя
-// Получить одну заметку пользователя
 func (s *noteService) GetNote(ctx context.Context, userID, id int) (models.Note, error) {
 	if userID <= 0 {
 		return models.Note{}, ErrInvalidUserID
@@ -97,8 +96,6 @@ func (s *noteService) GetAllNotes(ctx context.Context, userID int) ([]models.Not
 	return notes, nil
 }
 
-
-
 // Создать заметку для пользователя
 func (s *noteService) CreateNote(ctx context.Context, userID int, title, content string) (int, error) {
 	if userID <= 0 {
@@ -120,7 +117,6 @@ func (s *noteService) CreateNote(ctx context.Context, userID int, title, content
 		return 0, fmt.Errorf("service: create-note: %w", err)
 	}
 
-	// Инвалидируем кэш, чтобы следующие запросы заново прочитали из БД
 	if s.cache != nil {
 		if err := s.cache.Invalidate(ctx, userID); err != nil {
 			fmt.Printf("cache invalidate error for user %d: %v\n", userID, err)

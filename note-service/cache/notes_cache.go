@@ -34,7 +34,7 @@ func NewNotesCache() *NotesCache {
 
 	return &NotesCache{
 		client: client,
-		ttl:    90 * time.Second, // кэш живёт 90 сек
+		ttl:    90 * time.Second,
 	}
 }
 
@@ -49,8 +49,6 @@ func (c *NotesCache) key(userID int) string {
 	return fmt.Sprintf("notes:%d", userID)
 }
 
-// Пытаемся взять заметки из кэша.
-// Возвращаем: данные, найдено ли в кэше, ошибка.
 func (c *NotesCache) GetNotes(ctx context.Context, userID int) ([]models.Note, bool, error) {
 	if c == nil || c.client == nil {
 		return nil, false, nil
@@ -59,7 +57,7 @@ func (c *NotesCache) GetNotes(ctx context.Context, userID int) ([]models.Note, b
 	data, err := c.client.Get(ctx, c.key(userID)).Bytes()
 	if err != nil {
 		if err == redis.Nil {
-			return nil, false, nil // в кэше нет
+			return nil, false, nil 
 		}
 		return nil, false, fmt.Errorf("redis get: %w", err)
 	}
@@ -72,7 +70,6 @@ func (c *NotesCache) GetNotes(ctx context.Context, userID int) ([]models.Note, b
 	return notes, true, nil
 }
 
-// Кладём заметки в кэш
 func (c *NotesCache) SetNotes(ctx context.Context, userID int, notes []models.Note) error {
 	if c == nil || c.client == nil {
 		return nil
@@ -90,7 +87,6 @@ func (c *NotesCache) SetNotes(ctx context.Context, userID int, notes []models.No
 	return nil
 }
 
-// Инвалидируем (удаляем) кэш для пользователя — после create/update/delete
 func (c *NotesCache) Invalidate(ctx context.Context, userID int) error {
 	if c == nil || c.client == nil {
 		return nil

@@ -36,7 +36,6 @@ func RunUserRegisteredConsumer(ctx context.Context, noteSvc service.NoteService)
 		CommitInterval: time.Second,
 	})
 
-	// Закрытие reader при завершении контекста
 	go func() {
 		<-ctx.Done()
 		fmt.Println("[KAFKA] context closed, stopping consumer")
